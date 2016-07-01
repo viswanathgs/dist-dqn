@@ -168,9 +168,94 @@ class SimpleNetwork(Network):
 # Convolutional network described in
 # https://storage.googleapis.com/deepmind-data/assets/papers/DeepMindNature14236Paper.pdf
 class ConvNetwork(Network):
+  STATE_FRAMES = 4 # TODO slog move this somewhere else
+
+  CONV1_FILTERS = 32
+  CONV1_SIZE = 8
+  CONV1_STRIDE = 4
+
+  CONV2_FILTERS = 64
+  CONV2_SIZE = 4
+  CONV2_STRIDE = 2
+
+  CONV3_FILTERS = 64
+  CONV3_SIZE = 3
+  CONV3_STRIDE = 1
+
+  FULLY_CONNECTED_SIZE = 512
+
+  POOL_SIZE = [1, 2, 2, 1]
+  POOL_STRIDE = [1, 2, 2, 1]
+
   @classmethod
   def _init_layers(cls, config, inputs, input_shape, output_size):
     if len(input_shape) != 3:
       raise RuntimeError("%s expects 3-d input" % cls.__class__.__name__)
-    # TODO: Implement
-    raise NotImplementedError
+
+    weight_init = tf.truncated_normal_initializer(stddev=0.01)
+    bias_init = tf.constant_initializer(value=0.0)
+
+    params = []
+
+    # First hidden conv-pool layer
+    with tf.variable_scope('conv1'):
+      shape = \
+        [cls.CONV1_SIZE, cls.CONV1_SIZE, cls.STATE_FRAMES, cls.CONV1_FILTERS]
+      w1 = tf.get_variable('w', shape, initializer=weight_init)
+      b1 = tf.get_variable('b', cls.CONV1_FILTERS, initializer=bias_init)
+      a1 = cls.conv_pool(inputs, w1, b1, cls.CONV1_STRIDE)
+      params += [w1, b1]
+
+    # Second hidden conv-pool layer
+    with tf.variable_scope('conv2'):
+      shape = \
+        [cls.CONV2_SIZE, cls.CONV2_SIZE, cls.CONV1_FILTERS, cls.CONV2_FILTERS]
+      w2 = tf.get_variable('w', shape, initializer=weight_init)
+      b2 = tf.get_variable('b', cls.CONV2_FILTERS, initializer=bias_init)
+      a2 = cls.conv_pool(a1, w2, b2, cls.CONV2_STRIDE)
+      params += [w2, b2]
+
+    # Third hidden conv-pool layer
+    with tf.variable_scope('conv3'):
+      shape = \
+        [cls.CONV3_SIZE, cls.CONV3_SIZE, cls.CONV2_FILTERS, cls.CONV3_FILTERS]
+      w3 = tf.get_variable('w', shape, initializer=weight_init)
+      b3 = tf.get_variable('b', cls.CONV3_FILTERS, initializer=bias_init)
+      a3 = cls.conv_pool(a2, w3, b3, cls.CONV3_STRIDE)
+      params += [w3, b3]
+
+    # Final fully-connected hidden layer
+    with tf.variable_scope('fcl'):
+      shape = [cls.FULLY_CONNECTED_SIZE, cls.FULLY_CONNECTED_SIZE]
+      w4 = tf.get_variable('w', shape, initializer=weight_init)
+      b4 = tf.get_variable('b', cls.FULLY_CONNECTED_SIZE, initializer=bias_init)
+      a3_flat = tf.reshape(a3, [-1, cls.FULLY_CONNECTED_SIZE])
+      a4 = tf.nn.relu(tf.matmul(a3_flat, w4) + b4, name='relu')
+      params += [w4, b4]
+
+    with tf.variable_scope('output'):
+      shape = [cls.FULLY_CONNECTED_SIZE, output_size]
+      w5 = tf.get_variable('w', shape, initializer=weight_init)
+      b5 = tf.get_variable('b', output_size, initializer=bias_init)
+      output = tf.add(tf.matmul(a4, w5), b5, name='affine')
+      params += [w5, b5]
+
+    # L2 regularization for fully-connected weights
+    reg_loss = sum(tf.nn.l2_loss(w) for w in [w4, w5])
+
+    return params, output, reg_loss
+
+  @classmethod
+  def conv_stride(cls, stride):
+    return [1, stride, stride, 1]
+
+  @classmethod
+  def conv_pool(cls, inputs, filters, bias, stride):
+    conv = tf.nn.conv2d(inputs, filters, strides=cls.conv_stride(stride),
+                        padding='SAME', name='conv')
+    return cls.max_pool(tf.nn.relu(conv + bias))
+
+  @classmethod
+  def max_pool(cls, a):
+    return tf.nn.max_pool(a, ksize=cls.POOL_SIZE, strides=cls.POOL_STRIDE,
+                          padding='SAME', name='pool')
