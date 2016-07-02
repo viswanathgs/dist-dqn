@@ -1,3 +1,5 @@
+from frame_buffer import FrameBuffer
+from functools import partial
 from replay_memory import ReplayMemory
 from six.moves import range, zip, zip_longest
 from stats import Stats
@@ -9,7 +11,13 @@ import tensorflow as tf
 import utils
 
 class DQNAgent:
-  FAIURE_REWARD = {
+  # Environments for which the state frames need to be resized
+  RESIZE_STATE_FRAMES = [
+    'Pong-v0',
+  ]
+
+  # Reward penalty on failure for each environment
+  FAILURE_PENALTY = {
     'CartPole-v0': -100,
   }
 
@@ -20,9 +28,14 @@ class DQNAgent:
     self.replay_memory = replay_memory
     self.config = config
 
-    self.random_action_prob = config.init_random_action_prob
     self.total_steps = 0
     self.stats = Stats()
+    self.random_action_prob = config.init_random_action_prob
+
+    self.frame_buffer = FrameBuffer(
+      frames_per_state=config.frames_per_state,
+      preprocessor=self._get_frame_resizer(env, config),
+    )
 
     # Initialize target network
     self._update_target_network()
@@ -52,12 +65,12 @@ class DQNAgent:
     Run one episode of the gym environment, add transitions to replay memory,
     and train minibatches from replay memory against the target network.
     """
-    state = self.env.reset()
-    total_reward = 0
+    observation = self.env.reset()
+    self.frame_buffer.append(observation)
+    state = self.frame_buffer.get_state()
 
-    # TODO: Add support for multiple steps to capture time/motion for Pong
+    total_reward = steps = 0
     done = False
-    steps = 0
     while not done and (steps < max_steps):
       # Pick the next action and execute it
       action = self._pick_action(state)
@@ -66,16 +79,20 @@ class DQNAgent:
 
       # Punish hard on failure
       if done:
-        reward = self.FAIURE_REWARD.get(self.env.spec.id, reward)
+        reward = self.FAILURE_PENALTY.get(self.env.spec.id, reward)
       # TODO: Implement reward clipping
 
-      # Add the transition to replay memory and train a sampled minibatch
-      self.replay_memory.insert(state, action, reward, observation, done)
-      self._train_minibatch(self.config.minibatch_size)
+      # Add the transition to replay memory and update the current state
+      self.frame_buffer.append(observation)
+      next_state = self.frame_buffer.get_state()
+      self.replay_memory.add(state, action, reward, next_state, done)
+      state = next_state
 
-      state = observation
+      # Train a minibatch
+      self._train_minibatch(self.config.minibatch_size)
       steps += 1
       self.total_steps += 1
+
     return total_reward, steps
 
   def _train_minibatch(self, minibatch_size):
@@ -195,3 +212,30 @@ class DQNAgent:
       self.network.q_placeholder: expected_q,
       self.network.action_placeholder: actions,
     }
+
+  @classmethod
+  def _get_frame_resizer(cls, env, config):
+    """
+    Returns a lambda that takes a screen frame and resizes it to the
+    configured width and height. If the state doesn't need to be resized
+    for the environment, returns an identity function.
+
+    @return: lambda (frame -> resized_frame)
+    """
+    if env.spec.id not in cls.RESIZE_STATE_FRAMES:
+      return lambda x: x
+    return partial(
+      utils.resize_image,
+      width=config.resize_width,
+      height=config.resize_height,
+    )
+
+  @classmethod
+  def get_input_shape(cls, env, config):
+    """
+    Return the shape of the input to the network based on the environment,
+    config, and whether screen frames need to be resized or not.
+    """
+    if env.spec.id not in cls.RESIZE_STATE_FRAMES:
+      return env.observation_space.shape
+    return (config.resize_width, config.resize_height, config.frames_per_state)

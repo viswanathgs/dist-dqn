@@ -70,8 +70,9 @@ if __name__ == '__main__':
   logging.getLogger().setLevel(args.log_level)
 
   env = gym.make(args.env)
+  input_shape = DQNAgent.get_input_shape(env, args)
   network = Network.create_network(
-    input_shape=env.observation_space.shape,
+    input_shape=input_shape,
     num_actions=env.action_space.n,
     config=args,
   )

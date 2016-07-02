@@ -19,7 +19,7 @@ class ReplayMemory:
   def __init__(self, capacity): 
     self.memory = deque(maxlen=capacity)
 
-  def insert(self, state, action, reward, observation, terminal):
+  def add(self, state, action, reward, observation, terminal):
     self.memory.append((state, action, reward, observation, terminal))
 
   def size(self):
