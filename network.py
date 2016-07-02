@@ -32,7 +32,7 @@ class Network:
     }.get(config.network, None)
 
     if Net is None:
-      raise RuntimeError("Unsupported network type {}".format(config.network))
+      raise RuntimeError('Unsupported network type {}'.format(config.network))
 
     net = Net(input_shape, num_actions)
     net._init_network(config)
@@ -105,7 +105,7 @@ class Network:
     }.get(config.optimizer, None)
 
     if Optimizer is None:
-      raise RuntimeError("Unsupported optimizer {}".format(config.optimizer))
+      raise RuntimeError('Unsupported optimizer {}'.format(config.optimizer))
 
     # TODO: Experiment with gating gradients for improved parallelism
     # https://www.tensorflow.org/versions/r0.9/api_docs/python/train.html#gating-gradients
@@ -128,7 +128,7 @@ class SimpleNetwork(Network):
   @classmethod
   def _init_layers(cls, config, inputs, input_shape, output_size):
     if len(input_shape) != 1:
-      raise RuntimeError("%s expects 1-d input" % cls.__class__.__name__)
+      raise RuntimeError('%s expects 1-d input' % cls.__class__.__name__)
     input_size = input_shape[0]
 
     weight_init = tf.truncated_normal_initializer(stddev=0.01)
@@ -182,7 +182,7 @@ class ConvNetwork(Network):
   CONV3_SIZE = 3
   CONV3_STRIDE = 1
 
-  FULLY_CONNECTED_SIZE = 512
+  FULLY_CONNECTED_SIZE = 256
 
   POOL_SIZE = [1, 2, 2, 1]
   POOL_STRIDE = [1, 2, 2, 1]
@@ -190,7 +190,7 @@ class ConvNetwork(Network):
   @classmethod
   def _init_layers(cls, config, inputs, input_shape, output_size):
     if len(input_shape) != 3:
-      raise RuntimeError("%s expects 3-d input" % cls.__class__.__name__)
+      raise RuntimeError('%s expects 3-d input' % cls.__class__.__name__)
 
     weight_init = tf.truncated_normal_initializer(stddev=0.01)
     bias_init = tf.constant_initializer(value=0.0)
