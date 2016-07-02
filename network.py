@@ -168,8 +168,6 @@ class SimpleNetwork(Network):
 # Convolutional network described in
 # https://storage.googleapis.com/deepmind-data/assets/papers/DeepMindNature14236Paper.pdf
 class ConvNetwork(Network):
-  STATE_FRAMES = 4
-
   CONV1_FILTERS = 32
   CONV1_SIZE = 8
   CONV1_STRIDE = 4
@@ -182,10 +180,10 @@ class ConvNetwork(Network):
   CONV3_SIZE = 3
   CONV3_STRIDE = 1
 
-  FULLY_CONNECTED_SIZE = 256
-
   POOL_SIZE = [1, 2, 2, 1]
   POOL_STRIDE = [1, 2, 2, 1]
+
+  FULLY_CONNECTED_SIZE = 256
 
   @classmethod
   def _init_layers(cls, config, inputs, input_shape, output_size):
@@ -200,7 +198,7 @@ class ConvNetwork(Network):
     # First hidden conv-pool layer
     with tf.variable_scope('conv1'):
       shape = \
-        [cls.CONV1_SIZE, cls.CONV1_SIZE, cls.STATE_FRAMES, cls.CONV1_FILTERS]
+        [cls.CONV1_SIZE, cls.CONV1_SIZE, input_shape[2], cls.CONV1_FILTERS]
       w1 = tf.get_variable('w', shape, initializer=weight_init)
       b1 = tf.get_variable('b', cls.CONV1_FILTERS, initializer=bias_init)
       a1 = cls.conv_pool(inputs, w1, b1, cls.CONV1_STRIDE)
