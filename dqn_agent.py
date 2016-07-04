@@ -40,7 +40,7 @@ class DQNAgent:
     # Initialize target network
     self._update_target_network()
 
-  def train(self, num_episodes, max_steps_per_episode):
+  def train(self, num_episodes, max_steps_per_episode, supervisor=None):
     """
     Train the DQN for the configured number of episodes.
     """
@@ -59,6 +59,10 @@ class DQNAgent:
       # Update target network if needed
       if self.total_steps % self.config.target_update_freq == 0:
         self._update_target_network()
+
+      if supervisor and supervisor.should_stop():
+        logging.warning('Received signal to stop. Exiting train loop.')
+        break
 
   def train_episode(self, max_steps):
     """

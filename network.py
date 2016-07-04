@@ -18,6 +18,7 @@ class Network:
 
   q_output = None
   train_op = None
+  global_step = None
   summary = None
 
   def __init__(self, input_shape, num_actions):
@@ -57,9 +58,15 @@ class Network:
       q=self.q_output, 
       expected_q=self.q_placeholder, 
       actions=self.action_placeholder, 
-      reg_loss=reg_loss
+      reg_loss=reg_loss,
     )
-    self.train_op = self._init_optimizer(config, self.params, loss)
+    self.global_step = tf.Variable(0, name='global_step', trainable=False)
+    self.train_op = self._init_optimizer(
+      config,
+      params=self.params,
+      loss=loss,
+      global_step=self.global_step,
+    )
     # TODO: Add summary
 
   @classmethod
@@ -86,7 +93,7 @@ class Network:
     return loss
 
   @classmethod
-  def _init_optimizer(cls, config, params, loss):
+  def _init_optimizer(cls, config, params, loss, global_step=None):
     """
     Setup the optimizer for the provided params based on the loss function.
     Relies on config.optimizer to select the type of optimizer.
@@ -110,13 +117,16 @@ class Network:
     # TODO: Experiment with gating gradients for improved parallelism
     # https://www.tensorflow.org/versions/r0.9/api_docs/python/train.html#gating-gradients
     optimizer = Optimizer(learning_rate=config.lr)
-    step = tf.Variable(0, name='global_step', trainable=False)
 
     # Explicitly pass the list of trainable params instead of defaulting to
     # GraphKeys.TRAINABLE_VARIABLES. Otherwise, when this network becomes a
     # subgraph when in-graph replication is configured, TRAINABLE_VARIABLES
     # will contain params from all graph replicas due to global namespacing.
-    train_op = optimizer.minimize(loss, var_list=params, global_step=step)
+    train_op = optimizer.minimize(
+      loss,
+      var_list=params,
+      global_step=global_step,
+    )
     return train_op
 
 # Simple fully connected network with two fully connected layers with
