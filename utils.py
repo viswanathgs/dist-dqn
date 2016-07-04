@@ -1,3 +1,5 @@
+from six.moves import filterfalse
+
 import cv2
 import itertools
 import numpy as np
@@ -10,7 +12,7 @@ def partition(pred, iterable):
   @return: Tuple (iterable1, iterable2)
   """
   iter1, iter2 = itertools.tee(iterable)
-  return itertools.filterfalse(pred, iter1), filter(pred, iter2)
+  return filterfalse(pred, iter1), filter(pred, iter2)
 
 def decay(val, min_val, decay_rate):
   return max(val * decay_rate, min_val)
