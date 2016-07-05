@@ -27,13 +27,15 @@ class FrameBuffer:
   def append(self, frame):
     """
     Takes a frame, applies preprocessing, and appends it to the deque.
+
     The first frame added to the buffer is duplicated `frames_per_state` times
     to completely fill the buffer.
     """
     frame = self.preprocessor(frame)
     if len(self.frames) == 0:
       self.frames.extend(self.frames_per_state * [frame])
-    self.frames.append(frame)
+    else:
+      self.frames.append(frame)
 
   def get_state(self):
     """
