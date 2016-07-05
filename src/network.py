@@ -1,4 +1,5 @@
 from functools import partial
+from six.moves import zip
 
 import tensorflow as tf
 
@@ -10,14 +11,16 @@ import tensorflow as tf
 # New network architectures can be added by sub-classing Network and
 # implmementing the _init_layers() method.
 class Network:
-  params = []
-
   x_placeholder = None
   q_placeholder = None
   action_placeholder = None
 
   q_output = None
   train_op = None
+
+  target_q_output = None
+  target_update_ops = None
+
   summary_op = None
   global_step = None
 
@@ -48,7 +51,7 @@ class Network:
 
     # Inference-loss-training pattern
     summaries = []
-    self.params, self.q_output, reg_loss = self._init_layers(
+    params, self.q_output, reg_loss = self._init_layers(
       config, 
       inputs=self.x_placeholder, 
       input_shape=self.input_shape, 
@@ -66,9 +69,19 @@ class Network:
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.train_op = self._init_optimizer(
       config,
-      params=self.params,
+      params=params,
       loss=loss,
       global_step=self.global_step,
+      summaries=summaries,
+    )
+
+    # Target network
+    self.target_q_output, self.target_update_ops = self._init_target_network(
+      config,
+      inputs=self.x_placeholder,
+      input_shape=self.input_shape,
+      output_size=self.num_actions,
+      params=params,
       summaries=summaries,
     )
 
@@ -86,7 +99,7 @@ class Network:
     @return: (params, output_layer, regularized_loss)
     """
     raise NotImplementedError
-  
+
   @classmethod
   def _init_loss(cls, config, q, expected_q, actions, reg_loss=None,
                  summaries=None):
@@ -142,6 +155,27 @@ class Network:
       global_step=global_step,
     )
     return train_op
+
+  def _init_target_network(cls, config, inputs, input_shape, output_size,
+                           params, summaries=None):
+    """
+    Setup the target network used for minibatch training, and the
+    update operations to periodically update the target network with
+    the trained network.
+
+    @return: target_q_output, [target_update_ops]
+    """
+    with tf.variable_scope('target'):
+      target_params, target_q_output, _ = cls._init_layers(
+        config,
+        inputs=inputs,
+        input_shape=input_shape,
+        output_size=output_size,
+        summaries=summaries,
+      )
+    target_update_ops = \
+      [tf.assign(target_p, p) for target_p, p in zip(target_params, params)]
+    return target_q_output, target_update_ops
 
 # Simple fully connected network with two fully connected layers with
 # tanh activations and a final Affine layer.

@@ -42,14 +42,14 @@ class DQNAgent:
     if enable_summary:
       self.summary_writer = tf.train.SummaryWriter(config.logdir, session.graph)
 
-    # Initialize target network
+    # Initialize the target network
     self._update_target_network()
 
   def train(self, num_episodes, max_steps_per_episode, supervisor=None):
     """
     Train the DQN for the configured number of episodes.
     """
-    for episode in range(num_episodes):
+    for episode in range(1, num_episodes+1):
       # Train an episode
       reward, steps = self.train_episode(max_steps_per_episode)
 
@@ -61,8 +61,8 @@ class DQNAgent:
         'last-100 mean reward = %.2f' %
         (episode, steps, self.total_steps, reward, mean_reward))
 
-      # Update target network if needed
-      if self.total_steps % self.config.target_update_freq == 0:
+      # Update the target network if needed
+      if episode % self.config.target_update_freq == 0:
         self._update_target_network()
 
       if supervisor and supervisor.should_stop():
@@ -173,30 +173,25 @@ class DQNAgent:
   def _predict_q_values(self, states, use_target_network=False):
     """
     Run forward-prop through the network and fetch the q-values.
-    If use_target_network is True, then target_params will be used for
-    forward-prop.
+    If use_target_network is True, then the target network's params
+    will be used for forward-prop.
 
     @return: Numpy array of q-values for each state
     """
+    q_output = self.network.target_q_output if use_target_network \
+                                            else self.network.q_output
     feed_dict = {
       self.network.x_placeholder: states,
     }
-    if use_target_network:
-      feed_dict.update(zip(self.network.params, self.target_params))
-    return self.session.run(self.network.q_output, feed_dict=feed_dict)
+    return self.session.run(q_output, feed_dict=feed_dict)
 
   def _update_target_network(self):
     """
     Update the target network by capturing the current state of the
     network params.
     """
-    # TODO: This is slow as the params need to be copied from the device
-    # to the client / host memory. The target network could be made part
-    # of the graph itself using TensorFlow's control flow operators. That
-    # would make sure the target network always resides within the device
-    # and would avoid having to feed the weights to the device along 
-    # with minibatch for each gradient update step.
-    self.target_params = self.session.run(self.network.params)
+    logging.info('Updating target network')
+    self.session.run(self.network.target_update_ops)
 
   def _get_minibatch_feed_dict(self, target_q_values, 
                                non_terminal_minibatch, terminal_minibatch):
