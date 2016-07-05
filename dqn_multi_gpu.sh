@@ -72,7 +72,7 @@ do
   outfile="/tmp/ps$i"
   echo "Starting param server $i, redirecting stdout to $outfile"
 
-  python ../src/main.py \
+  python ./src/main.py \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="ps" \
@@ -89,7 +89,7 @@ do
   outfile="/tmp/worker$i"
   echo "Starting worker $i, redirecting stdout to $outfile"
 
-  python ../src/main.py \
+  python ./src/main.py \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="worker" \

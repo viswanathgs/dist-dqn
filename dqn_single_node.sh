@@ -19,4 +19,4 @@ else
   exit 1
 fi
 
-python ../src/main.py $DQN_PARAMS
+python ./src/main.py $DQN_PARAMS
