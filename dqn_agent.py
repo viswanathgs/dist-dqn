@@ -21,7 +21,8 @@ class DQNAgent:
     'CartPole-v0': -100,
   }
 
-  def __init__(self, env, network, session, replay_memory, config):
+  def __init__(self, env, network, session, replay_memory, config,
+               enable_summary=True):
     self.env = env
     self.network = network
     self.session = session
@@ -36,6 +37,10 @@ class DQNAgent:
       frames_per_state=config.frames_per_state,
       preprocessor=self._get_frame_resizer(env, config),
     )
+
+    self.summary_writer = None
+    if enable_summary:
+      self.summary_writer = tf.train.SummaryWriter(config.logdir, session.graph)
 
     # Initialize target network
     self._update_target_network()
@@ -121,8 +126,15 @@ class DQNAgent:
       non_terminal_minibatch,
       terminal_minibatch,
     )
-    # TODO: Add TensorFlow summary
-    self.session.run(self.network.train_op, feed_dict=feed_dict)
+
+    if self._should_log_summary():
+      _, summary = self.session.run(
+        [self.network.train_op, self.network.summary_op],
+        feed_dict=feed_dict,
+      )
+      self.summary_writer.add_summary(summary, self.total_steps)
+    else:
+      self.session.run(self.network.train_op, feed_dict=feed_dict)
 
   def _pick_action(self, state):
     """
@@ -216,6 +228,13 @@ class DQNAgent:
       self.network.q_placeholder: expected_q,
       self.network.action_placeholder: actions,
     }
+
+  def _should_log_summary(self):
+    if self.summary_writer is None:
+      return False
+
+    summary_freq = self.config.summary_freq
+    return summary_freq > 0 and (self.total_steps % summary_freq == 0)
 
   @classmethod
   def _get_frame_resizer(cls, env, config):

@@ -73,8 +73,12 @@ def parse_args():
     help='Index of this task within the job')
   parser.add_argument('--gpu_id', default=0, type=int,
     help='Index of the GPU to run the training on')
+
+  # Summary
   parser.add_argument('--logdir', default='/tmp/train_logs',
     help='Directory for training summary and logs')
+  parser.add_argument('--summary_freq', default=100, type=int,
+    help='Frequency for writing summary (in terms of global steps')
 
   return parser.parse_args()
 
@@ -97,17 +101,24 @@ def run_worker(cluster, server, args):
     )
     init_op = tf.initialize_all_variables()
 
+  # Designate the first worker task as the chief
+  is_chief = (args.task_id == 0)
+
   # Create a Supervisor that oversees training and co-ordination of workers
   sv = tf.train.Supervisor(
-    is_chief=(args.task_id == 0), # Mark the first task as the chief
+    is_chief=is_chief,
     logdir=args.logdir,
     init_op=init_op,
     global_step=network.global_step,
+    summary_op=None, # Explicitly disable as DQNAgent handles summaries
   )
 
   # Start the gym monitor if needed
   if args.monitor:
     env.monitor.start(args.monitor_path, force=True)
+
+  # Initialize memory for experience replay
+  replay_memory = ReplayMemory(args.replay_memory_capacity)
 
   # Start the session and kick-off the train loop
   config=tf.ConfigProto(
@@ -115,14 +126,18 @@ def run_worker(cluster, server, args):
     allow_soft_placement=True,
   )
   with sv.managed_session(server.target, config=config) as session:
-    replay_memory = ReplayMemory(args.replay_memory_capacity)
-    dqn_agent = DQNAgent(env, network, session, replay_memory, args)
+    dqn_agent = DQNAgent(
+      env, network, session, replay_memory, args,
+      enable_summary=is_chief, # Log summaries only from the chief worker
+    )
     dqn_agent.train(args.num_episodes, args.max_steps_per_episode, sv)
-  sv.stop() # Stop all other services
 
   # Close the gym monitor
   if args.monitor:
     env.monitor.close()
+
+  # Stop all other services
+  sv.stop()
 
 if __name__ == '__main__':
   args = parse_args()

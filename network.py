@@ -18,8 +18,8 @@ class Network:
 
   q_output = None
   train_op = None
+  summary_op = None
   global_step = None
-  summary = None
 
   def __init__(self, input_shape, num_actions):
     self.input_shape = list(input_shape)
@@ -47,11 +47,13 @@ class Network:
                                              [None, self.num_actions])
 
     # Inference-loss-training pattern
+    summaries = []
     self.params, self.q_output, reg_loss = self._init_layers(
       config, 
       inputs=self.x_placeholder, 
       input_shape=self.input_shape, 
       output_size=self.num_actions,
+      summaries=summaries,
     )
     loss = self._init_loss(
       config, 
@@ -59,6 +61,7 @@ class Network:
       expected_q=self.q_placeholder, 
       actions=self.action_placeholder, 
       reg_loss=reg_loss,
+      summaries=summaries,
     )
     self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.train_op = self._init_optimizer(
@@ -66,11 +69,16 @@ class Network:
       params=self.params,
       loss=loss,
       global_step=self.global_step,
+      summaries=summaries,
     )
-    # TODO: Add summary
+
+    # Merge all the summaries in this graph
+    if summaries:
+      self.summary_op = tf.merge_summary(summaries)
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size):
+  def _init_layers(cls, config, inputs, input_shape, output_size,
+                   summaries=None):
     """
     Setup the layers and trainable params of the network. Subclasses should
     implement this to initialize the appropriate network architecture.
@@ -80,7 +88,8 @@ class Network:
     raise NotImplementedError
   
   @classmethod
-  def _init_loss(cls, config, q, expected_q, actions, reg_loss=None):
+  def _init_loss(cls, config, q, expected_q, actions, reg_loss=None,
+                 summaries=None):
     """
     Setup the loss function and apply regularization is provided.
 
@@ -90,10 +99,15 @@ class Network:
     loss = tf.reduce_mean(tf.squared_difference(q_masked, expected_q))
     if reg_loss is not None:
       loss += config.reg_param * reg_loss
+
+    if summaries is not None:
+      summaries.append(tf.scalar_summary('loss', loss))
+
     return loss
 
   @classmethod
-  def _init_optimizer(cls, config, params, loss, global_step=None):
+  def _init_optimizer(cls, config, params, loss, global_step=None,
+                      summaries=None):
     """
     Setup the optimizer for the provided params based on the loss function.
     Relies on config.optimizer to select the type of optimizer.
@@ -136,7 +150,8 @@ class SimpleNetwork(Network):
   HIDDEN2_SIZE = 20
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size):
+  def _init_layers(cls, config, inputs, input_shape, output_size,
+                   summaries=None):
     if len(input_shape) != 1:
       raise RuntimeError('%s expects 1-d input' % cls.__class__.__name__)
     input_size = input_shape[0]
@@ -196,7 +211,8 @@ class ConvNetwork(Network):
   FULLY_CONNECTED_SIZE = 256
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size):
+  def _init_layers(cls, config, inputs, input_shape, output_size,
+                   summaries=None):
     if len(input_shape) != 3:
       raise RuntimeError('%s expects 3-d input' % cls.__class__.__name__)
 
