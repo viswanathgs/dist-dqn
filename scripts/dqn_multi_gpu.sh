@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Single-host multi-GPU DQN 
+# Single-host multi-GPU DQN
 # (Data parallelism using between-graph replication)
 
 source "dqn_params.sh"
 
 if [ "$#" -ne 2 ]; then
   echo "Usage: $0 <env_name> <num_gpus>"
-  exit 1 
+  exit 1
 fi
 
 env_name=$1
@@ -22,10 +22,10 @@ fi
 
 # num_gpus == 0: 1 CPU worker
 # num_gpus == 1: 1 GPU worker
-# num_gpus > 1: num_gpus-1 GPU workers (Param servers allocate all the 
+# num_gpus > 1: num_gpus-1 GPU workers (Param servers allocate all the
 #               parameters on GPU 0, and allocating the graph replica on the
-#               same device makes it run out of memory. So only use the remaining
-#               devices for parallelism).
+#               same device makes it run out of memory. So only use the
+#               remaining devices for parallelism).
 num_gpus=$2
 if [[ "$num_gpus" -le 1 ]]; then
   NUM_WORKERS=1
@@ -72,7 +72,7 @@ do
   outfile="/tmp/ps$i"
   echo "Starting param server $i, redirecting stdout to $outfile"
 
-  python ./src/main.py \
+  python ../src/main.py \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="ps" \
@@ -89,7 +89,7 @@ do
   outfile="/tmp/worker$i"
   echo "Starting worker $i, redirecting stdout to $outfile"
 
-  python ./src/main.py \
+  python ../src/main.py \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="worker" \
