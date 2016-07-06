@@ -21,6 +21,8 @@ def parse_args():
     help='Turn on OpenAI Gym monitor')
   parser.add_argument('--monitor_path', default='/tmp/gym',
     help='Path for OpenAI Gym monitor logs')
+  parser.add_argument('--disable_video', action='store_true',
+    help='Disable video recording while when running the monitor')
   
   # Network
   parser.add_argument('--network', default='simple', choices=['simple', 'cnn'],
@@ -115,8 +117,9 @@ def run_worker(cluster, server, args):
   )
 
   # Start the gym monitor if needed
+  video = False if args.disable_video else None
   if args.monitor:
-    env.monitor.start(args.monitor_path, force=True)
+    env.monitor.start(args.monitor_path, force=True, video_callable=video)
 
   # Initialize memory for experience replay
   replay_memory = ReplayMemory(args.replay_memory_capacity)

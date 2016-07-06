@@ -91,7 +91,13 @@ do
   outfile="/tmp/worker$i"
   echo "Starting worker $i, redirecting stdout to $outfile"
 
-  python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS \
+  # Turn on OpenAI gym monitor only for the first worker
+  MONITOR=""
+  if [[ "$i" -eq 0 ]]; then
+    MONITOR="--monitor --disable_video" # Disable video for headless machines
+  fi
+
+  python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS $MONITOR \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="worker" \

@@ -21,4 +21,5 @@ else
   exit 1
 fi
 
-python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS
+# Run the DQN with the gym monitor on. Disable video for headless machines.
+python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS --monitor --disable_video
