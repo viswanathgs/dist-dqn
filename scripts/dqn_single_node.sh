@@ -2,12 +2,14 @@
 
 # DQN on a single node with 0 or 1 GPU
 
-source "dqn_params.sh"
-
 if [ "$#" -ne 1 ]; then
   echo "Usage: $0 <env_name>"
   exit 1
 fi
+
+SCRIPTS_DIR=$( cd "$(dirname "${BASH_SOURCE}")" ; pwd -P )
+
+source "$SCRIPTS_DIR/dqn_params.sh"
 
 env_name=$1
 if [[ "$env_name" == "cartpole" ]]; then
@@ -19,4 +21,4 @@ else
   exit 1
 fi
 
-python ../src/main.py $DQN_PARAMS
+python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS

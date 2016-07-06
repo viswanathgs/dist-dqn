@@ -3,12 +3,14 @@
 # Single-host multi-GPU DQN
 # (Data parallelism using between-graph replication)
 
-source "dqn_params.sh"
-
 if [ "$#" -ne 2 ]; then
   echo "Usage: $0 <env_name> <num_gpus>"
   exit 1
 fi
+
+SCRIPTS_DIR=$( cd "$(dirname "${BASH_SOURCE}")" ; pwd -P )
+
+source "$SCRIPTS_DIR/dqn_params.sh"
 
 env_name=$1
 if [[ "$env_name" == "cartpole" ]]; then
@@ -72,7 +74,7 @@ do
   outfile="/tmp/ps$i"
   echo "Starting param server $i, redirecting stdout to $outfile"
 
-  python ../src/main.py \
+  python "$SCRIPTS_DIR/../src/main.py" \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="ps" \
@@ -89,13 +91,12 @@ do
   outfile="/tmp/worker$i"
   echo "Starting worker $i, redirecting stdout to $outfile"
 
-  python ../src/main.py \
+  python "$SCRIPTS_DIR/../src/main.py" $DQN_PARAMS \
   --ps_hosts=$PS_HOSTS \
   --worker_hosts=$WORKER_HOSTS \
   --job="worker" \
   --task_id=$i \
   --gpu_id=$(($i + 1)) \
-  $DQN_PARAMS \
   > $outfile 2>&1 &
 
   i=$(($i + 1))
