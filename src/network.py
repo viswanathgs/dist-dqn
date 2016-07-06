@@ -9,7 +9,7 @@ import tensorflow as tf
 # and a convolutional neural-network are support.
 #
 # New network architectures can be added by sub-classing Network and
-# implmementing the _init_layers() method.
+# implmementing the _init_params() and _init_layers() methods.
 class Network:
   x_placeholder = None
   q_placeholder = None
@@ -50,15 +50,24 @@ class Network:
     self.action_placeholder = tf.placeholder(tf.float32, 
                                              [None, self.num_actions])
 
-    # Inference-loss-training pattern
     summaries = []
-    params, self.q_output, reg_loss = self._init_layers(
+
+    # Params and layers
+    params = self._init_params(
       config,
-      inputs=self.x_placeholder,
       input_shape=self.input_shape,
       output_size=self.num_actions,
       summaries=summaries,
     )
+    self.q_output, reg_loss = self._init_layers(
+      config,
+      inputs=self.x_placeholder,
+      params=params,
+      summaries=summaries,
+    )
+
+    # Loss and training
+    self.global_step = tf.Variable(0, name='global_step', trainable=False)
     loss = self._init_loss(
       config,
       q=self.q_output,
@@ -67,7 +76,6 @@ class Network:
       reg_loss=reg_loss,
       summaries=summaries,
     )
-    self.global_step = tf.Variable(0, name='global_step', trainable=False)
     self.train_op = self._init_optimizer(
       config,
       params=params,
@@ -92,13 +100,25 @@ class Network:
       self.summary_op = tf.merge_summary(summaries)
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size,
-                   summaries=None):
+  def _init_params(cls, config, input_shape, output_size, summaries=None):
+    """
+    Setup the trainable params for the network. Subclasses should
+    implement this to create all the weights and biases.
+
+    @return: Tuple of weights and biases
+    """
+    raise NotImplementedError
+
+  @classmethod
+  def _init_layers(cls, config, inputs, params, summaries=None):
     """
     Setup the layers and trainable params of the network. Subclasses should
     implement this to initialize the appropriate network architecture.
 
-    @return: (params, output_layer, regularized_loss)
+    @param inputs: Placeholder for the input layer
+    @param params: Tuple of weights and biases returned by _init_params()
+
+    @return: (output_layer, regularized_loss)
     """
     raise NotImplementedError
 
@@ -175,16 +195,25 @@ class Network:
 
     @return: target_q_output, [target_update_ops]
     """
+    # Initialize the target weights and layers
     with tf.variable_scope('target'):
-      target_params, target_q_output, _ = cls._init_layers(
+      target_params = cls._init_params(
         config,
-        inputs=inputs,
         input_shape=input_shape,
         output_size=output_size,
         summaries=summaries,
       )
+      target_q_output, _ = cls._init_layers(
+        config,
+        inputs=inputs,
+        params=target_params,
+        summaries=summaries,
+      )
+
+    # Create assign ops to periodically update the target network
     target_update_ops = \
       [tf.assign(target_p, p) for target_p, p in zip(target_params, params)]
+
     return target_q_output, target_update_ops
 
 # Simple fully connected network with two fully connected layers with
@@ -194,8 +223,7 @@ class SimpleNetwork(Network):
   HIDDEN2_SIZE = 20
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size,
-                   summaries=None):
+  def _init_params(cls, config, input_shape, output_size, summaries=None):
     if len(input_shape) != 1:
       raise RuntimeError('%s expects 1-d input' % cls.__class__.__name__)
     input_size = input_shape[0]
@@ -203,36 +231,42 @@ class SimpleNetwork(Network):
     weight_init = tf.truncated_normal_initializer(stddev=0.01)
     bias_init = tf.constant_initializer(value=0.0)
 
-    params = []
-
     # First hidden layer
     with tf.variable_scope('hidden1'):
       shape = [input_size, cls.HIDDEN1_SIZE]
       w1 = tf.get_variable('w', shape, initializer=weight_init)
       b1 = tf.get_variable('b', cls.HIDDEN1_SIZE, initializer=bias_init)
-      a1 = tf.nn.tanh(tf.matmul(inputs, w1) + b1, name='tanh')
-      params += [w1, b1]
 
     # Second hidden layer
     with tf.variable_scope('hidden2'):
       shape = [cls.HIDDEN1_SIZE, cls.HIDDEN2_SIZE]
       w2 = tf.get_variable('w', shape, initializer=weight_init)
       b2 = tf.get_variable('b', cls.HIDDEN2_SIZE, initializer=bias_init)
-      a2 = tf.nn.tanh(tf.matmul(a1, w2) + b2, name='tanh')
-      params += [w2, b2]
-    
+
     # Output layer
     with tf.variable_scope('output'):
       shape = [cls.HIDDEN2_SIZE, output_size]
       w3 = tf.get_variable('w', shape, initializer=weight_init)
       b3 = tf.get_variable('b', output_size, initializer=bias_init)
+
+    return (w1, b1, w2, b2, w3, b3)
+
+  @classmethod
+  def _init_layers(cls, config, inputs, params, summaries=None):
+    w1, b1, w2, b2, w3, b3 = params
+
+    # Layers
+    with tf.name_scope('hidden1'):
+      a1 = tf.nn.tanh(tf.matmul(inputs, w1) + b1, name='tanh')
+    with tf.name_scope('hidden2'):
+      a2 = tf.nn.tanh(tf.matmul(a1, w2) + b2, name='tanh')
+    with tf.name_scope('output'):
       output = tf.add(tf.matmul(a2, w3), b3, name='affine')
-      params += [w3, b3]
 
     # L2 regularization for weights excluding biases
     reg_loss = sum(tf.nn.l2_loss(w) for w in [w1, w2, w3])
 
-    return params, output, reg_loss
+    return output, reg_loss
 
 # Convolutional network described in
 # https://storage.googleapis.com/deepmind-data/assets/papers/DeepMindNature14236Paper.pdf
@@ -255,15 +289,12 @@ class ConvNetwork(Network):
   FULLY_CONNECTED_SIZE = 256
 
   @classmethod
-  def _init_layers(cls, config, inputs, input_shape, output_size,
-                   summaries=None):
+  def _init_params(cls, config, input_shape, output_size, summaries=None):
     if len(input_shape) != 3:
       raise RuntimeError('%s expects 3-d input' % cls.__class__.__name__)
 
     weight_init = tf.truncated_normal_initializer(stddev=0.01)
     bias_init = tf.constant_initializer(value=0.0)
-
-    params = []
 
     # First hidden conv-pool layer
     with tf.variable_scope('conv1'):
@@ -271,8 +302,6 @@ class ConvNetwork(Network):
         [cls.CONV1_SIZE, cls.CONV1_SIZE, input_shape[2], cls.CONV1_FILTERS]
       w1 = tf.get_variable('w', shape, initializer=weight_init)
       b1 = tf.get_variable('b', cls.CONV1_FILTERS, initializer=bias_init)
-      a1 = cls.conv_pool(inputs, w1, b1, cls.CONV1_STRIDE)
-      params += [w1, b1]
 
     # Second hidden conv-pool layer
     with tf.variable_scope('conv2'):
@@ -280,8 +309,6 @@ class ConvNetwork(Network):
         [cls.CONV2_SIZE, cls.CONV2_SIZE, cls.CONV1_FILTERS, cls.CONV2_FILTERS]
       w2 = tf.get_variable('w', shape, initializer=weight_init)
       b2 = tf.get_variable('b', cls.CONV2_FILTERS, initializer=bias_init)
-      a2 = cls.conv_pool(a1, w2, b2, cls.CONV2_STRIDE)
-      params += [w2, b2]
 
     # Third hidden conv-pool layer
     with tf.variable_scope('conv3'):
@@ -289,29 +316,42 @@ class ConvNetwork(Network):
         [cls.CONV3_SIZE, cls.CONV3_SIZE, cls.CONV2_FILTERS, cls.CONV3_FILTERS]
       w3 = tf.get_variable('w', shape, initializer=weight_init)
       b3 = tf.get_variable('b', cls.CONV3_FILTERS, initializer=bias_init)
-      a3 = cls.conv_pool(a2, w3, b3, cls.CONV3_STRIDE)
-      params += [w3, b3]
 
     # Final fully-connected hidden layer
     with tf.variable_scope('fcl'):
       shape = [cls.FULLY_CONNECTED_SIZE, cls.FULLY_CONNECTED_SIZE]
       w4 = tf.get_variable('w', shape, initializer=weight_init)
       b4 = tf.get_variable('b', cls.FULLY_CONNECTED_SIZE, initializer=bias_init)
-      a3_flat = tf.reshape(a3, [-1, cls.FULLY_CONNECTED_SIZE])
-      a4 = tf.nn.relu(tf.matmul(a3_flat, w4) + b4, name='relu')
-      params += [w4, b4]
 
+    # Output layer
     with tf.variable_scope('output'):
       shape = [cls.FULLY_CONNECTED_SIZE, output_size]
       w5 = tf.get_variable('w', shape, initializer=weight_init)
       b5 = tf.get_variable('b', output_size, initializer=bias_init)
+
+    return (w1, b1, w2, b2, w3, b3, w4, b4, w5, b5)
+
+  @classmethod
+  def _init_layers(cls, config, inputs, params, summaries=None):
+    w1, b1, w2, b2, w3, b3, w4, b4, w5, b5 = params
+
+    # Layers
+    with tf.name_scope('conv1'):
+      a1 = cls.conv_pool(inputs, w1, b1, cls.CONV1_STRIDE)
+    with tf.name_scope('conv2'):
+      a2 = cls.conv_pool(a1, w2, b2, cls.CONV2_STRIDE)
+    with tf.name_scope('conv3'):
+      a3 = cls.conv_pool(a2, w3, b3, cls.CONV3_STRIDE)
+    with tf.name_scope('fcl'):
+      a3_flat = tf.reshape(a3, [-1, cls.FULLY_CONNECTED_SIZE])
+      a4 = tf.nn.relu(tf.matmul(a3_flat, w4) + b4, name='relu')
+    with tf.name_scope('output'):
       output = tf.add(tf.matmul(a4, w5), b5, name='affine')
-      params += [w5, b5]
 
     # L2 regularization for fully-connected weights
     reg_loss = sum(tf.nn.l2_loss(w) for w in [w4, w5])
 
-    return params, output, reg_loss
+    return output, reg_loss
 
   @classmethod
   def conv_stride(cls, stride):
