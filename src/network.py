@@ -24,12 +24,13 @@ class Network:
   summary_op = None
   global_step = None
 
-  def __init__(self, input_shape, num_actions):
+  def __init__(self, input_shape, num_actions, num_replicas=1):
     self.input_shape = list(input_shape)
     self.num_actions = num_actions
+    self.num_replicas = num_replicas # Used for synchronous training if enabled
 
   @staticmethod
-  def create_network(input_shape, num_actions, config):
+  def create_network(config, input_shape, num_actions, num_replicas=1):
     Net = {
       'simple': SimpleNetwork,
       'cnn': ConvNetwork,
@@ -38,7 +39,7 @@ class Network:
     if Net is None:
       raise RuntimeError('Unsupported network type {}'.format(config.network))
 
-    net = Net(input_shape, num_actions)
+    net = Net(input_shape, num_actions, num_replicas=num_replicas)
     net._init_network(config)
     return net
   
@@ -52,17 +53,17 @@ class Network:
     # Inference-loss-training pattern
     summaries = []
     params, self.q_output, reg_loss = self._init_layers(
-      config, 
-      inputs=self.x_placeholder, 
-      input_shape=self.input_shape, 
+      config,
+      inputs=self.x_placeholder,
+      input_shape=self.input_shape,
       output_size=self.num_actions,
       summaries=summaries,
     )
     loss = self._init_loss(
-      config, 
-      q=self.q_output, 
-      expected_q=self.q_placeholder, 
-      actions=self.action_placeholder, 
+      config,
+      q=self.q_output,
+      expected_q=self.q_placeholder,
+      actions=self.action_placeholder,
       reg_loss=reg_loss,
       summaries=summaries,
     )
@@ -71,6 +72,7 @@ class Network:
       config,
       params=params,
       loss=loss,
+      num_replicas=self.num_replicas,
       global_step=self.global_step,
       summaries=summaries,
     )
@@ -119,8 +121,8 @@ class Network:
     return loss
 
   @classmethod
-  def _init_optimizer(cls, config, params, loss, global_step=None,
-                      summaries=None):
+  def _init_optimizer(cls, config, params, loss, num_replicas=1,
+                      global_step=None, summaries=None):
     """
     Setup the optimizer for the provided params based on the loss function.
     Relies on config.optimizer to select the type of optimizer.
@@ -144,6 +146,14 @@ class Network:
     # TODO: Experiment with gating gradients for improved parallelism
     # https://www.tensorflow.org/versions/r0.9/api_docs/python/train.html#gating-gradients
     optimizer = Optimizer(learning_rate=config.lr)
+
+    # Synchronize gradient updates if enabled
+    if config.sync:
+      optimizer = tf.train.SyncReplicasOptimizer(
+        optimizer,
+        replicas_to_aggregate=num_replicas,
+        replica_id=config.task_id,
+      )
 
     # Explicitly pass the list of trainable params instead of defaulting to
     # GraphKeys.TRAINABLE_VARIABLES. Otherwise, when this network becomes a

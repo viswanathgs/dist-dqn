@@ -75,6 +75,8 @@ def parse_args():
     help='Index of this task within the job')
   parser.add_argument('--gpu_id', default=0, type=int,
     help='Index of the GPU to run the training on')
+  parser.add_argument('--sync', action='store_true',
+    help='Whether to perform synchronous training')
 
   # Summary
   parser.add_argument('--logdir', default='/tmp/train_logs',
@@ -86,10 +88,11 @@ def parse_args():
 
 def run_worker(cluster, server, args):
   env = gym.make(args.env)
+  worker_job = args.job
 
   # If no GPU devices are found, the allow_soft_placement in the
   # config below results in falling back to CPU.
-  device = '/job:%s/task:%d/gpu:%d' % (args.job, args.task_id, args.gpu_id)
+  device = '/job:%s/task:%d/gpu:%d' % (worker_job, args.task_id, args.gpu_id)
   replica_setter = tf.train.replica_device_setter(
     worker_device=device,
     cluster=cluster,
@@ -97,9 +100,10 @@ def run_worker(cluster, server, args):
   with tf.device(replica_setter):
     # Place the network on the appropriate device for this worker
     network = Network.create_network(
+      config=args,
       input_shape=DQNAgent.get_input_shape(env, args),
       num_actions=env.action_space.n,
-      config=args,
+      num_replicas=len(cluster.job_tasks(worker_job)),
     )
     init_op = tf.initialize_all_variables()
 
