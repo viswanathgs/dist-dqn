@@ -5,15 +5,15 @@
 CARTPOLE="\
 --env=CartPole-v0 \
 --network=simple \
---optimizer=sgd \
+--optimizer=adam \
 --lr=0.001 \
---minibatch_size=30 \
---num_episodes=3000 \
+--minibatch_size=100 \
+--num_episodes=5000 \
 --max_steps_per_episode=200 \
 --replay_memory_capacity=10000 \
---target_update_freq=300 \
+--target_update_freq=400 \
 --reward_discount=0.9 \
---init_random_action_prob=0.9 \
+--init_random_action_prob=0.5 \
 --min_random_action_prob=0.1 \
 --random_action_explore_steps=10000 \
 "
