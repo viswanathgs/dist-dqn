@@ -15,7 +15,7 @@ CARTPOLE="\
 --reward_discount=0.9 \
 --init_random_action_prob=0.9 \
 --min_random_action_prob=0.1 \
---random_action_prob_decay=0.99 \
+--random_action_explore_steps=10000 \
 "
 
 PONG="\
@@ -31,7 +31,7 @@ PONG="\
 --reward_discount=0.9 \
 --init_random_action_prob=0.5 \
 --min_random_action_prob=0.1 \
---random_action_prob_decay=0.99 \
+--random_action_explore_steps=10000 \
 --frames_per_state=4 \
 --resize_width=80 \
 --resize_height=80 \

@@ -31,7 +31,13 @@ class DQNAgent:
 
     self.total_steps = 0
     self.stats = Stats()
+
     self.random_action_prob = config.init_random_action_prob
+    self.random_action_prob_decay = utils.decay_per_step(
+      init_val=self.config.init_random_action_prob,
+      min_val=self.config.min_random_action_prob,
+      steps=self.config.random_action_explore_steps,
+    )
 
     self.frame_buffer = FrameBuffer(
       frames_per_state=config.frames_per_state,
@@ -164,11 +170,8 @@ class DQNAgent:
     return random.random() < self.random_action_prob
 
   def _decay_random_action_prob(self):
-    self.random_action_prob = utils.decay(
-      val=self.random_action_prob,
-      min_val=self.config.min_random_action_prob, 
-      decay_rate=self.config.random_action_prob_decay,
-    )
+    if self.random_action_prob > self.config.min_random_action_prob:
+      self.random_action_prob -= self.random_action_prob_decay
 
   def _predict_q_values(self, states, use_target_network=False):
     """

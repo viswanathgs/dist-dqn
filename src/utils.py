@@ -1,3 +1,5 @@
+from __future__ import division
+
 from six.moves import filterfalse
 
 import cv2
@@ -16,6 +18,11 @@ def partition(pred, iterable):
 
 def decay(val, min_val, decay_rate):
   return max(val * decay_rate, min_val)
+
+def decay_per_step(init_val, min_val, steps):
+  if steps <= 0:
+    return 0.0
+  return (init_val - min_val) / steps
 
 def one_hot(i, n):
   """

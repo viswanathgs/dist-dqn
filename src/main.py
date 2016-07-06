@@ -53,12 +53,12 @@ def parse_args():
     help='Discount factor for future rewards')
   parser.add_argument('--replay_memory_capacity', default=10000, type=int,
     help='Max size of the memory for experience replay')
-  parser.add_argument('--init_random_action_prob', default=0.5, type=float,
+  parser.add_argument('--init_random_action_prob', default=0.9, type=float,
     help='Initial probability for choosing random actions')
-  parser.add_argument('--random_action_prob_decay', default=0.99, type=float,
-    help='Decay rate for random action probability')
   parser.add_argument('--min_random_action_prob', default=0.1, type=float,
     help='Threshold at which to stop decaying random action probability')
+  parser.add_argument('--random_action_explore_steps', default=10000, type=int,
+    help='Number of steps over which to decay the random action probability')
   parser.add_argument('--target_update_freq', default=300, type=int,
     help='Frequency for updating target network in terms of number of episodes')
 
