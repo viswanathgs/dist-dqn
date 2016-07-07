@@ -131,7 +131,7 @@ def run_worker(cluster, server, args):
     init_op=init_op,
     global_step=network.global_step,
     summary_op=None, # Explicitly disable as DQNAgent handles summaries
-    recovery_wait_secs=5,
+    recovery_wait_secs=3,
   )
 
   # Start the gym monitor if needed
