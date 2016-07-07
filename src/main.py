@@ -96,10 +96,14 @@ def parse_args():
 def run_worker(cluster, server, args):
   env = gym.make(args.env)
   worker_job = args.job
+  num_workers = len(cluster.job_tasks(worker_job))
 
-  # Have param server pin params to CPU unless specified otherwise.
-  # If disabled and if the host has GPU support, /gpu:0 is used by default.
-  ps_device = None if args.disable_cpu_param_pinning else '/cpu'
+  ps_device = None
+  if num_workers > 1 and not args.disable_cpu_param_pinning:
+    # If in a distributed setup, have param servers pin params to CPU.
+    # Otherwise, in a multi-GPU setup, /gpu:0 would be used for params
+    # by default, and it becomes a communication bottleneck.
+    ps_device = '/cpu'
 
   # If no GPU devices are found, then allow_soft_placement in the
   # config below results in falling back to CPU.
@@ -115,7 +119,7 @@ def run_worker(cluster, server, args):
       config=args,
       input_shape=DQNAgent.get_input_shape(env, args),
       num_actions=env.action_space.n,
-      num_replicas=len(cluster.job_tasks(worker_job)),
+      num_replicas=num_workers,
       ps_device=ps_device,
       worker_device=worker_device,
     )
