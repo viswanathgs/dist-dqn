@@ -77,6 +77,13 @@ def parse_args():
     help='Index of the GPU to run the training on')
   parser.add_argument('--sync', action='store_true',
     help='Whether to perform synchronous training')
+  parser.add_argument('--disable_cpu_param_pinning', action='store_true',
+    help='If set, param server will not pin the varaibles to CPU, allowing '
+         'TensorFlow to default to GPU:0 if the host has GPU devices')
+  parser.add_argument('--disable_target_replication', action='store_true',
+    help='Unless set, the target params will be replicated on each GPU. '
+         'Setting the flag defaults to a single set of target params managed '
+         'by the param server.')
 
   # Summary
   parser.add_argument('--logdir', default='/tmp/train_logs',
@@ -90,20 +97,27 @@ def run_worker(cluster, server, args):
   env = gym.make(args.env)
   worker_job = args.job
 
-  # If no GPU devices are found, the allow_soft_placement in the
+  # Have param server pin params to CPU unless specified otherwise.
+  # If disabled and if the host has GPU support, /gpu:0 is used by default.
+  ps_device = None if args.disable_cpu_param_pinning else '/cpu'
+
+  # If no GPU devices are found, then allow_soft_placement in the
   # config below results in falling back to CPU.
-  device = '/job:%s/task:%d/gpu:%d' % (worker_job, args.task_id, args.gpu_id)
+  worker_device = '/job:%s/task:%d/gpu:%d' % \
+                      (worker_job, args.task_id, args.gpu_id)
+
   replica_setter = tf.train.replica_device_setter(
-    worker_device=device,
+    worker_device=worker_device,
     cluster=cluster,
   )
   with tf.device(replica_setter):
-    # Place the network on the appropriate device for this worker
     network = Network.create_network(
       config=args,
       input_shape=DQNAgent.get_input_shape(env, args),
       num_actions=env.action_space.n,
       num_replicas=len(cluster.job_tasks(worker_job)),
+      ps_device=ps_device,
+      worker_device=worker_device,
     )
     init_op = tf.initialize_all_variables()
 

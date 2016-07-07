@@ -24,13 +24,20 @@ class Network:
   summary_op = None
   global_step = None
 
-  def __init__(self, input_shape, num_actions, num_replicas=1):
+  def __init__(self, input_shape, num_actions, num_replicas=1,
+               ps_device=None, worker_device=None):
     self.input_shape = list(input_shape)
     self.num_actions = num_actions
     self.num_replicas = num_replicas # Used for synchronous training if enabled
+    self.ps_device = ps_device # Device constraints used by param server
+    self.worker_device = worker_device # Used for target param replication
 
   @staticmethod
-  def create_network(config, input_shape, num_actions, num_replicas=1):
+  def create_network(config, input_shape, num_actions, num_replicas=1,
+                     ps_device=None, worker_device=None):
+    """
+    Creates and returns a network type based on config.network.
+    """
     Net = {
       'simple': SimpleNetwork,
       'cnn': ConvNetwork,
@@ -39,7 +46,13 @@ class Network:
     if Net is None:
       raise RuntimeError('Unsupported network type {}'.format(config.network))
 
-    net = Net(input_shape, num_actions, num_replicas=num_replicas)
+    net = Net(
+      input_shape=input_shape,
+      num_actions=num_actions,
+      num_replicas=num_replicas,
+      ps_device=ps_device,
+      worker_device=worker_device,
+    )
     net._init_network(config)
     return net
   
@@ -53,12 +66,13 @@ class Network:
     summaries = []
 
     # Params and layers
-    params = self._init_params(
-      config,
-      input_shape=self.input_shape,
-      output_size=self.num_actions,
-      summaries=summaries,
-    )
+    with tf.device(self.ps_device):
+      params = self._init_params(
+        config,
+        input_shape=self.input_shape,
+        output_size=self.num_actions,
+        summaries=summaries,
+      )
     self.q_output, reg_loss = self._init_layers(
       config,
       inputs=self.x_placeholder,
@@ -92,6 +106,8 @@ class Network:
       input_shape=self.input_shape,
       output_size=self.num_actions,
       params=params,
+      ps_device=self.ps_device,
+      worker_device=self.worker_device,
       summaries=summaries,
     )
 
@@ -187,7 +203,8 @@ class Network:
     return train_op
 
   def _init_target_network(cls, config, inputs, input_shape, output_size,
-                           params, summaries=None):
+                           params, ps_device=None, worker_device=None,
+                           summaries=None):
     """
     Setup the target network used for minibatch training, and the
     update operations to periodically update the target network with
@@ -195,14 +212,34 @@ class Network:
 
     @return: target_q_output, [target_update_ops]
     """
+
+    if not config.disable_target_replication:
+      # Replicate the target network params within each worker instead of it
+      # being managed by the param server. Since the target network is frozen
+      # for many steps, this cuts down the communication overhead of
+      # transferring them from the param server's device during each train loop.
+      # Also, they need to be marked as local variables so that all workers
+      # initialize them locally. Otherwise, non-chief workers are forever
+      # waiting for the chief worker to initialize the replicated target params.
+      target_param_device = worker_device
+      collections = tf.GraphKeys.LOCAL_VARIABLES
+    else:
+      # If target param replication is disabled, param server takes the
+      # ownership of target params. Allocate on the same device as the other
+      # params managed by the param server.
+      target_param_device = ps_device
+      collections = None
+
     # Initialize the target weights and layers
     with tf.variable_scope('target'):
-      target_params = cls._init_params(
-        config,
-        input_shape=input_shape,
-        output_size=output_size,
-        summaries=summaries,
-      )
+      with tf.device(target_param_device):
+        target_params = cls._init_params(
+          config,
+          input_shape=input_shape,
+          output_size=output_size,
+          collections=collections,
+          summaries=summaries,
+        )
       target_q_output, _ = cls._init_layers(
         config,
         inputs=inputs,
@@ -223,7 +260,8 @@ class SimpleNetwork(Network):
   HIDDEN2_SIZE = 20
 
   @classmethod
-  def _init_params(cls, config, input_shape, output_size, summaries=None):
+  def _init_params(cls, config, input_shape, output_size, collections=None,
+                   summaries=None):
     if len(input_shape) != 1:
       raise RuntimeError('%s expects 1-d input' % cls.__class__.__name__)
     input_size = input_shape[0]
@@ -234,20 +272,26 @@ class SimpleNetwork(Network):
     # First hidden layer
     with tf.variable_scope('hidden1'):
       shape = [input_size, cls.HIDDEN1_SIZE]
-      w1 = tf.get_variable('w', shape, initializer=weight_init)
-      b1 = tf.get_variable('b', cls.HIDDEN1_SIZE, initializer=bias_init)
+      w1 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b1 = tf.get_variable('b', cls.HIDDEN1_SIZE, initializer=bias_init,
+                           collections=collections)
 
     # Second hidden layer
     with tf.variable_scope('hidden2'):
       shape = [cls.HIDDEN1_SIZE, cls.HIDDEN2_SIZE]
-      w2 = tf.get_variable('w', shape, initializer=weight_init)
-      b2 = tf.get_variable('b', cls.HIDDEN2_SIZE, initializer=bias_init)
+      w2 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b2 = tf.get_variable('b', cls.HIDDEN2_SIZE, initializer=bias_init,
+                           collections=collections)
 
     # Output layer
     with tf.variable_scope('output'):
       shape = [cls.HIDDEN2_SIZE, output_size]
-      w3 = tf.get_variable('w', shape, initializer=weight_init)
-      b3 = tf.get_variable('b', output_size, initializer=bias_init)
+      w3 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b3 = tf.get_variable('b', output_size, initializer=bias_init,
+                           collections=collections)
 
     return (w1, b1, w2, b2, w3, b3)
 
@@ -289,7 +333,8 @@ class ConvNetwork(Network):
   FULLY_CONNECTED_SIZE = 256
 
   @classmethod
-  def _init_params(cls, config, input_shape, output_size, summaries=None):
+  def _init_params(cls, config, input_shape, output_size, collections=None,
+                   summaries=None):
     if len(input_shape) != 3:
       raise RuntimeError('%s expects 3-d input' % cls.__class__.__name__)
 
@@ -300,34 +345,44 @@ class ConvNetwork(Network):
     with tf.variable_scope('conv1'):
       shape = \
         [cls.CONV1_SIZE, cls.CONV1_SIZE, input_shape[2], cls.CONV1_FILTERS]
-      w1 = tf.get_variable('w', shape, initializer=weight_init)
-      b1 = tf.get_variable('b', cls.CONV1_FILTERS, initializer=bias_init)
+      w1 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b1 = tf.get_variable('b', cls.CONV1_FILTERS, initializer=bias_init,
+                           collections=collections)
 
     # Second hidden conv-pool layer
     with tf.variable_scope('conv2'):
       shape = \
         [cls.CONV2_SIZE, cls.CONV2_SIZE, cls.CONV1_FILTERS, cls.CONV2_FILTERS]
-      w2 = tf.get_variable('w', shape, initializer=weight_init)
-      b2 = tf.get_variable('b', cls.CONV2_FILTERS, initializer=bias_init)
+      w2 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b2 = tf.get_variable('b', cls.CONV2_FILTERS, initializer=bias_init,
+                           collections=collections)
 
     # Third hidden conv-pool layer
     with tf.variable_scope('conv3'):
       shape = \
         [cls.CONV3_SIZE, cls.CONV3_SIZE, cls.CONV2_FILTERS, cls.CONV3_FILTERS]
-      w3 = tf.get_variable('w', shape, initializer=weight_init)
-      b3 = tf.get_variable('b', cls.CONV3_FILTERS, initializer=bias_init)
+      w3 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b3 = tf.get_variable('b', cls.CONV3_FILTERS, initializer=bias_init,
+                           collections=collections)
 
     # Final fully-connected hidden layer
     with tf.variable_scope('fcl'):
       shape = [cls.FULLY_CONNECTED_SIZE, cls.FULLY_CONNECTED_SIZE]
-      w4 = tf.get_variable('w', shape, initializer=weight_init)
-      b4 = tf.get_variable('b', cls.FULLY_CONNECTED_SIZE, initializer=bias_init)
+      w4 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b4 = tf.get_variable('b', cls.FULLY_CONNECTED_SIZE, initializer=bias_init,
+                           collections=collections)
 
     # Output layer
     with tf.variable_scope('output'):
       shape = [cls.FULLY_CONNECTED_SIZE, output_size]
-      w5 = tf.get_variable('w', shape, initializer=weight_init)
-      b5 = tf.get_variable('b', output_size, initializer=bias_init)
+      w5 = tf.get_variable('w', shape, initializer=weight_init,
+                           collections=collections)
+      b5 = tf.get_variable('b', output_size, initializer=bias_init,
+                           collections=collections)
 
     return (w1, b1, w2, b2, w3, b3, w4, b4, w5, b5)
 
