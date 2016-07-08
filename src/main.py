@@ -35,7 +35,7 @@ def parse_args():
     help='Type of optimizer for gradient descent')
   parser.add_argument('--momentum', default=0.9, type=float,
     help='Momentum value for MomentumOptimizer')
-  parser.add_argument('--rmsprop_decay', default=0.9, type=float,
+  parser.add_argument('--rmsprop_decay', default=0.95, type=float,
     help='Decay for RMSPropOptimizer')
 
   # Agent
