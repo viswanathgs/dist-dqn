@@ -263,7 +263,7 @@ class SimpleNetwork(Network):
   def _init_params(cls, config, input_shape, output_size, collections=None,
                    summaries=None):
     if len(input_shape) != 1:
-      raise RuntimeError('%s expects 1-d input' % cls.__class__.__name__)
+      raise RuntimeError('%s expects 1-d input' % cls.__name__)
     input_size = input_shape[0]
 
     weight_init = tf.truncated_normal_initializer(stddev=0.01)

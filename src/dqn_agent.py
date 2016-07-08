@@ -11,11 +11,6 @@ import tensorflow as tf
 import utils
 
 class DQNAgent:
-  # Environments for which the state frames need to be resized
-  RESIZE_STATE_FRAMES = [
-    'Pong-v0',
-  ]
-
   # Reward penalty on failure for each environment
   FAILURE_PENALTY = {
     # 'CartPole-v0': -100,
@@ -271,13 +266,10 @@ class DQNAgent:
 
     @return: lambda (frame -> resized_frame)
     """
-    if env.spec.id not in cls.RESIZE_STATE_FRAMES:
-      return lambda x: x
-    return partial(
-      utils.resize_image,
-      width=config.resize_width,
-      height=config.resize_height,
-    )
+    width, height = config.resize_width, config.resize_height
+    if width > 0 and height > 0:
+      return partial(utils.resize_image, width=width, height=height)
+    return lambda x: x
 
   @classmethod
   def get_input_shape(cls, env, config):
@@ -285,6 +277,7 @@ class DQNAgent:
     Return the shape of the input to the network based on the environment,
     config, and whether screen frames need to be resized or not.
     """
-    if env.spec.id not in cls.RESIZE_STATE_FRAMES:
-      return env.observation_space.shape
-    return (config.resize_width, config.resize_height, config.frames_per_state)
+    width, height = config.resize_width, config.resize_height
+    if width > 0 and height > 0:
+      return (width, height, config.frames_per_state)
+    return env.observation_space.shape

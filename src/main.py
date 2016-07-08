@@ -47,10 +47,10 @@ def parse_args():
     help='Minibatch size for each training step')
   parser.add_argument('--frames_per_state', default=1, type=int,
     help='Number of consecutive frames that form a state')
-  parser.add_argument('--resize_width', default=80, type=int,
-    help='Resized screen width for frame pre-processing')
-  parser.add_argument('--resize_height', default=80, type=int,
-    help='Resized screen height for frame pre-processing')
+  parser.add_argument('--resize_width', default=0, type=int,
+    help='Resized screen width for frame pre-processing (0 for no resizing)')
+  parser.add_argument('--resize_height', default=0, type=int,
+    help='Resized screen height for frame pre-processing (0 for no resizing)')
   parser.add_argument('--reward_discount', default=0.9, type=float,
     help='Discount factor for future rewards')
   parser.add_argument('--replay_memory_capacity', default=10000, type=int,

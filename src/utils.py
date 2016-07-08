@@ -2,7 +2,7 @@ from __future__ import division
 
 from six.moves import filterfalse
 
-import cv2
+# import cv2
 import itertools
 import numpy as np
 
@@ -41,5 +41,6 @@ def resize_image(image, width, height):
   Resize the image screen to the configured width and height and
   convert it to grayscale.
   """
-  grayscale = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-  return cv2.resize(grayscale, (width, height))
+  # grayscale = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+  # return cv2.resize(grayscale, (width, height))
+  return image
