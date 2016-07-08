@@ -18,7 +18,7 @@ class DQNAgent:
 
   # Reward penalty on failure for each environment
   FAILURE_PENALTY = {
-    'CartPole-v0': -100,
+    # 'CartPole-v0': -100,
   }
 
   def __init__(self, env, network, session, replay_memory, config,
