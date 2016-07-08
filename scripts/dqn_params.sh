@@ -11,11 +11,11 @@ CARTPOLE="\
 --num_episodes=10000 \
 --max_steps_per_episode=200 \
 --replay_memory_capacity=50000 \
---target_update_freq=10000 \
+--target_update_freq=3000 \
 --reward_discount=0.9 \
 --init_random_action_prob=0.5 \
 --min_random_action_prob=0.1 \
---random_action_explore_steps=10000 \
+--random_action_explore_steps=50000 \
 "
 
 PONG="\
