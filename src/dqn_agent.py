@@ -55,7 +55,7 @@ class DQNAgent:
     """
     Train the DQN for the configured number of episodes.
     """
-    for episode in range(1, num_episodes+1):
+    for episode in range(num_episodes):
       # Train an episode
       reward, steps = self.train_episode(max_steps_per_episode)
 
@@ -66,10 +66,6 @@ class DQNAgent:
         'Episode = %d, steps = %d, total steps = %d, reward = %d, '
         'last-100 mean reward = %.2f' %
         (episode, steps, self.total_steps, reward, mean_reward))
-
-      # Update the target network if needed
-      if episode % self.config.target_update_freq == 0:
-        self._update_target_network()
 
       if supervisor and supervisor.should_stop():
         logging.warning('Received signal to stop. Exiting train loop.')
@@ -107,6 +103,9 @@ class DQNAgent:
       self._train_minibatch(self.config.minibatch_size)
       steps += 1
       self.total_steps += 1
+
+      # Update the target network if needed
+      self._update_target_network()
 
     return total_reward, steps
 
@@ -193,8 +192,9 @@ class DQNAgent:
     Update the target network by capturing the current state of the
     network params.
     """
-    logging.info('Updating target network')
-    self.session.run(self.network.target_update_ops)
+    if self.total_steps % self.config.target_update_freq == 0:
+      logging.info('Updating target network')
+      self.session.run(self.network.target_update_ops)
 
   def _get_minibatch_feed_dict(self, target_q_values, 
                                non_terminal_minibatch, terminal_minibatch):
