@@ -39,14 +39,17 @@ class DQNAgent:
       steps=self.config.random_action_explore_steps,
     )
 
+    self.summary_writer = None
+    if enable_summary:
+      self.summary_writer = tf.train.SummaryWriter(config.logdir, session.graph)
+
     self.frame_buffer = FrameBuffer(
       frames_per_state=config.frames_per_state,
       preprocessor=self._get_frame_resizer(env, config),
     )
 
-    self.summary_writer = None
-    if enable_summary:
-      self.summary_writer = tf.train.SummaryWriter(config.logdir, session.graph)
+    # Prefill the replay memory with experiences based on random actions
+    self._prefill_replay_memory(self.config.replay_start_size)
 
     # Initialize the target network
     self._update_target_network()
@@ -189,6 +192,30 @@ class DQNAgent:
       self.network.x_placeholder: states,
     }
     return self.session.run(q_output, feed_dict=feed_dict)
+
+  def _prefill_replay_memory(self, prefill_size):
+    """
+    Prefill the replay memory by picking actions via uniform random policy,
+    executing them, and adding the experiences to the memory.
+    """
+    terminal = True
+    while self.replay_memory.size() < prefill_size:
+      # Reset the environment and the frame buffer between gameplays
+      if terminal:
+        self.frame_buffer.clear()
+        observation = self.env.reset()
+        self.frame_buffer.append(observation)
+        state = self.frame_buffer.get_state()
+
+      # Sample a random action and execute it
+      action = self.env.action_space.sample()
+      observation, reward, terminal, _ = self.env.step(action)
+
+      # Pre-populate replay memory with the experience
+      self.frame_buffer.append(observation)
+      next_state = self.frame_buffer.get_state()
+      self.replay_memory.add(state, action, reward, next_state, terminal)
+      state = next_state
 
   def _update_target_network(self):
     """

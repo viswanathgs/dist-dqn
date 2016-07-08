@@ -55,6 +55,8 @@ def parse_args():
     help='Discount factor for future rewards')
   parser.add_argument('--replay_memory_capacity', default=10000, type=int,
     help='Max size of the memory for experience replay')
+  parser.add_argument('--replay_start_size', default=0, type=int,
+    help='Size to prefill the replay memory to based on random actions')
   parser.add_argument('--init_random_action_prob', default=0.9, type=float,
     help='Initial probability for choosing random actions')
   parser.add_argument('--min_random_action_prob', default=0.1, type=float,

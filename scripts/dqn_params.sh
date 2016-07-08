@@ -34,6 +34,7 @@ PONG="\
 --random_action_explore_steps=1000000 \
 --frames_per_state=4 \
 --update_freq=4 \
+--replay_start_size=10000 \
 --resize_width=84 \
 --resize_height=84 \
 "
