@@ -61,8 +61,10 @@ def parse_args():
     help='Threshold at which to stop decaying random action probability')
   parser.add_argument('--random_action_explore_steps', default=10000, type=int,
     help='Number of steps over which to decay the random action probability')
+  parser.add_argument('--update_freq', default=1, type=int,
+    help='Number of actions by the agent between successive learning updates')
   parser.add_argument('--target_update_freq', default=10000, type=int,
-    help='Frequency for updating target network in terms of number of steps')
+    help='Target network update frequency in terms of number of training steps')
 
   # Distribution
   parser.add_argument('--ps_hosts', default='',

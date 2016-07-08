@@ -29,7 +29,7 @@ class DQNAgent:
     self.replay_memory = replay_memory
     self.config = config
 
-    self.total_steps = 0
+    self.training_steps = 0 # Keeps count of learning updates
     self.stats = Stats()
 
     self.random_action_prob = config.init_random_action_prob
@@ -63,9 +63,9 @@ class DQNAgent:
       self.stats.log_episode(reward, steps)
       mean_reward = self.stats.last_100_mean_reward()
       logging.info(
-        'Episode = %d, steps = %d, total steps = %d, reward = %d, '
+        'Episode = %d, steps = %d, reward = %d, training steps = %d, '
         'last-100 mean reward = %.2f' %
-        (episode, steps, self.total_steps, reward, mean_reward))
+        (episode, steps, reward, self.training_steps, mean_reward))
 
       if supervisor and supervisor.should_stop():
         logging.warning('Received signal to stop. Exiting train loop.')
@@ -88,6 +88,7 @@ class DQNAgent:
       action = self._pick_action(state)
       observation, reward, done, _ = self.env.step(action)
       total_reward += reward
+      steps += 1
 
       # Punish hard on failure
       if done:
@@ -101,9 +102,8 @@ class DQNAgent:
       state = next_state
 
       # Train a minibatch
-      self._train_minibatch(self.config.minibatch_size)
-      steps += 1
-      self.total_steps += 1
+      if steps % self.config.update_freq == 0:
+        self._train_minibatch(self.config.minibatch_size)
 
       # Update the target network if needed
       self._update_target_network()
@@ -113,6 +113,8 @@ class DQNAgent:
   def _train_minibatch(self, minibatch_size):
     if self.replay_memory.size() < minibatch_size:
       return
+
+    self.training_steps += 1
 
     # Sample a minibatch from replay memory
     non_terminal_minibatch, terminal_minibatch = \
@@ -138,7 +140,7 @@ class DQNAgent:
         [self.network.train_op, self.network.summary_op],
         feed_dict=feed_dict,
       )
-      self.summary_writer.add_summary(summary, self.total_steps)
+      self.summary_writer.add_summary(summary, self.training_steps)
     else:
       self.session.run(self.network.train_op, feed_dict=feed_dict)
 
@@ -193,7 +195,7 @@ class DQNAgent:
     Update the target network by capturing the current state of the
     network params.
     """
-    if self.total_steps % self.config.target_update_freq == 0:
+    if self.training_steps % self.config.target_update_freq == 0:
       logging.info('Updating target network')
       self.session.run(self.network.target_update_ops)
 
@@ -233,7 +235,7 @@ class DQNAgent:
       return False
 
     summary_freq = self.config.summary_freq
-    return summary_freq > 0 and (self.total_steps % summary_freq == 0)
+    return summary_freq > 0 and (self.training_steps % summary_freq == 0)
 
   @classmethod
   def _get_frame_resizer(cls, env, config):

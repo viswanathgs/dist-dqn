@@ -33,6 +33,7 @@ PONG="\
 --min_random_action_prob=0.1 \
 --random_action_explore_steps=1000000 \
 --frames_per_state=4 \
+--update_freq=4 \
 --resize_width=84 \
 --resize_height=84 \
 "
