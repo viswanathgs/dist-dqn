@@ -76,6 +76,7 @@ class DQNAgent:
     Run one episode of the gym environment, add transitions to replay memory,
     and train minibatches from replay memory against the target network.
     """
+    self.frame_buffer.clear()
     observation = self.env.reset()
     self.frame_buffer.append(observation)
     state = self.frame_buffer.get_state()

@@ -49,3 +49,9 @@ class FrameBuffer:
     if self.frames_per_state == 1:
       return self.frames[0]
     return np.stack(self.frames, axis=-1)
+
+  def clear(self):
+    """
+    Clear the frames in the buffer.
+    """
+    self.frames.clear()
