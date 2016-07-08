@@ -104,12 +104,10 @@ class DQNAgent:
       self.replay_memory.add(state, action, reward, next_state, done)
       state = next_state
 
-      # Train a minibatch
+      # Train a minibatch and update the target network if needed
       if steps % self.config.update_freq == 0:
         self._train_minibatch(self.config.minibatch_size)
-
-      # Update the target network if needed
-      self._update_target_network()
+        self._update_target_network()
 
     return total_reward, steps
 
