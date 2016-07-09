@@ -102,15 +102,12 @@ class DQNAgent:
       # Train a minibatch and update the target network if needed
       if steps % self.config.update_freq == 0:
         self._train_minibatch(self.config.minibatch_size)
-        self._update_target_network()
 
     return total_reward, steps
 
   def _train_minibatch(self, minibatch_size):
     if self.replay_memory.size() < minibatch_size:
       return
-
-    self.training_steps += 1
 
     # Sample a minibatch from replay memory
     non_terminal_minibatch, terminal_minibatch = \
@@ -139,6 +136,11 @@ class DQNAgent:
       self.summary_writer.add_summary(summary, self.training_steps)
     else:
       self.session.run(self.network.train_op, feed_dict=feed_dict)
+
+    self.training_steps += 1
+
+    # Update the target network if needed
+    self._update_target_network()
 
   def _pick_action(self, state):
     """
