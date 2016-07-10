@@ -44,7 +44,7 @@ ATARI="\
 dqn_params_for_env() {
   if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <env_type> <env_name>. " \
-         "Options for env_type: [classic, atari]."
+         "Options for env_type: [control, atari]."
     exit 1
   fi
 

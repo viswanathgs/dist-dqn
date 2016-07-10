@@ -5,7 +5,7 @@
 
 if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <env_type> <env_name> <num_gpus>. " \
-       "Options for env_type: [classic, atari]."
+       "Options for env_type: [control, atari]."
   exit 1
 fi
 

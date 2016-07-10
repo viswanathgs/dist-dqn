@@ -145,16 +145,13 @@ def run_worker(cluster, server, args):
   # Start the gym monitor if needed
   video = False if args.disable_video else None
   if args.monitor:
-    env.monitor.start(args.monitor_path, force=True, video_callable=video)
+    env.monitor.start(args.monitor_path, resume=True, video_callable=video)
 
   # Initialize memory for experience replay
   replay_memory = ReplayMemory(args.replay_memory_capacity)
 
   # Start the session and kick-off the train loop
-  config=tf.ConfigProto(
-    log_device_placement=True,
-    allow_soft_placement=True,
-  )
+  config=tf.ConfigProto(log_device_placement=True, allow_soft_placement=True)
   with sv.managed_session(server.target, config=config) as session:
     dqn_agent = DQNAgent(
       env, network, session, replay_memory, args,
